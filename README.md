@@ -1,4 +1,4 @@
-# DEL: Domain Embedding Layer (Official Project Webpage)
+# DEL: Domain Embedding Layer (Official Project, 2023, Neurips)
 This repository provides the official PyTorch implementation of the following paper:
 
 > **Abstract:** 
@@ -13,15 +13,15 @@ This repository provides the official PyTorch implementation of the following pa
 
 Clone this repository.
 ```
-git clone https://github.com/janus103/DEL.git
-cd DEL
+ => git clone https://github.com/janus103/DEL.git
+ => cd DEL
 ```
 
 Easy conda environment setting: you only need to import del.yaml.
 
 ```
-conda create --name DEL python=3.9
-conda env export > del.yaml
+ => conda create --name DEL python=3.9
+ => conda env export > del.yaml
 ```
 
 ## Train & Validation
