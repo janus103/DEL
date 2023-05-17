@@ -1,1 +1,1 @@
-# DEL
+# DEL: Domain Embedding Layer
