@@ -1,4 +1,4 @@
-# DEL: Domain Embedding Layer (Official Project, 2023, Neurips)
+# DEL: Domain Embedding Layer (Official Project, NeurIPS 2023)
 This repository provides the official PyTorch implementation of the following paper:
 
 > **Abstract:** 
