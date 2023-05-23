@@ -53,7 +53,6 @@ class ImageDataset(data.Dataset):
         
     def __getitem__(self, index):
         img, target = self.reader[index]
-        #print('Loggger jin {} {} '.format(index, self.reader.filename(index)))
         try:
             img = img.read() if self.load_bytes else Image.open(img)
         except Exception as e:
