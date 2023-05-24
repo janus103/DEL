@@ -78,6 +78,6 @@ CUDA_VISIBLE_DEVICES=0 python validate.py [dataset path] --model [models] --inpu
 ```
 
 ## Acknowledgments
-Our pytorch implementation is heavily derived from [TIMM](https://github.com/huggingface/pytorch-image-models) and [Pytorch Wavelets](https://github.com/fbcotter/pytorch_wavelets).
+Our pytorch implementation is heavily derived from [TIMM](https://github.com/huggingface/pytorch-image-models), [Pytorch Wavelets](https://github.com/fbcotter/pytorch_wavelets) and [PDEN](https://github.com/lileicv/PDEN).
 
-Thanks to the TIMM and Pytorch_Wavelets implementations.
+Thanks to the TIMM, Pytorch_Wavelets and PDEN implementations.
