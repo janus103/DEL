@@ -1,4 +1,4 @@
-# DEL: Domain Embedding Layer (Official Project, NeurIPS 2023)
+# DEL: Domain Embedding Layer Using Discrete Wavelet Transform for Single Domain Generalization (Official Project, NeurIPS 2023)
 This repository provides the official PyTorch implementation of the following paper:
 
 > **Abstract:** 
@@ -13,15 +13,22 @@ This repository provides the official PyTorch implementation of the following pa
 
 Clone this repository.
 ```
- => git clone https://github.com/janus103/DEL.git
- => cd DEL
+ $ git clone https://github.com/janus103/DEL.git
+ $ cd DEL
 ```
 
 Easy conda environment setting: you only need to import del.yaml.
 
 ```
- => conda create --name DEL python=3.9
- => conda env export > del.yaml
+ $ conda create --name DEL python=3.9
+ $ conda env export > del.yaml
+```
+
+The easiest way to install pytorch_wavelets for DWT operations (i.e., 2D)
+
+```
+ $ cd pytorch_wavelets
+ $ pip install .
 ```
 
 ## Train & Validation
@@ -62,7 +69,7 @@ You can also add the following arguments for automatic augmentation or scale mod
         + Only Scale Level 1 LL 
     + --dwt_quant 3
         + Only Low Frequency domain
-    
+
 ### Validation
 Also, you can easily perform the validation with the bash command below.
 Only by changing the code in brackets
@@ -72,6 +79,9 @@ Only by changing the code in brackets
 + --corrupted
     + FORMAT: '{Corruption}_{Sevirity Level}'
     + By adding this argument, you can test with corrupted image without additional storage space.
++ --vit
+    + It is essential to include this argument when utilizing Transformer-based models.
+    
     
 ```
 CUDA_VISIBLE_DEVICES=0 python validate.py [dataset path] --model [models] --input-size 3 224 224 --checkpoint [.pth file] --no-prefetch -b 1 --corrupted [Fog_1] --sfn [Train_id] --results-file [result.csv] --dwt-kernel-size [7 7 7] --dwt_level [2 2 2] --dwt_bn 0 1 --dwt_quant [0-3]
