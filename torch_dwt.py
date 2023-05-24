@@ -17,14 +17,11 @@ def make_figure_out(tensor_dwt_lst):
     tensor_dwt_lst[3] = (torch.round(tensor_dwt_lst[3] + 127.5).to(torch.int32)/255)
 
 def get_dwt_pil(image_pil):
-    #storch.multiprocessing.set_start_method('spawn')
     image_tensor = T.functional.pil_to_tensor(image_pil)
     tensor_dwt_lst = list()
-    #print('TEST --> ', image_tensor.shape) # 3 224 224 
-    #print('TEST(2) --> ', image_tensor.dtype)  
+
     get_dwt_level1(image_tensor.unsqueeze(0).cuda().to(torch.float32), tensor_dwt_lst ,None, None)
-    #get_dwt_level1(image_tensor.unsqueeze(0), tensor_dwt_lst ,None, None)
-    #make_figure_out(tensor_dwt_lst)    
+
     print('XXX')
     return torch.cat(tensor_dwt_lst, dim=0)
 
@@ -41,14 +38,13 @@ def get_dwt_level1(x: torch.Tensor, lst, x_dwt_rate = None, x_bias: torch.Tensor
         #rate = [0.5, 0.25, 0.125]
         #rate = [0.5, 0., 0.]
         rate = [1, 1, 1]
+        
         #print('Level 1 ')
         lst.append(LL)
         lst.append(HS[0][:,:,0,:,:] * rate[0])
         lst.append(HS[0][:,:,1,:,:] * rate[0])
         lst.append(HS[0][:,:,2,:,:] * rate[1])
     else:      
-        #print('Level 1 Not None ')
-
         lst.append(LL)
         lst.append(HS[0][:,:,0,:,:] * (sum(x_dwt_rate[1]) / len(x_dwt_rate[1])))
         lst.append(HS[0][:,:,1,:,:] * (sum(x_dwt_rate[2]) / len(x_dwt_rate[2])))
@@ -190,10 +186,7 @@ def get_dwt_level2(x: torch.Tensor, lst, x_dwt_rate = None, x_quant = None):
     
 def get_dwt_level2_inverse(lst, mode=0):
     ifm = DWTInverse(mode='zero', wave='db1').cuda()
-    B, C, W, H = lst[0].shape
-    
-    #print('(2) -> ',lst[15].shape)
-    
+    B, C, W, H = lst[0].shape    
     lst[1] = lst[1].unsqueeze(2) 
     lst[2] = lst[2].unsqueeze(2) 
     lst[3] = lst[3].unsqueeze(2) 
@@ -241,19 +234,15 @@ def get_dwt_level2_inverse(lst, mode=0):
     
     
 def get_dwt_level1_list(ratio_x: torch.Tensor):
-    #ratio = ratio_x.unsqueeze(1).unsqueeze(1)
     ratio = ratio_x
     B,C,H,W = ratio.shape
 
-    #size = int(math.sqrt(W))
     size = W
     
     ratio = ratio.reshape((B,C,size,size))        
 
     xfm = DWTForward(J=1, mode='zero', wave='db1').cuda()
-    #print(type(xfm))
     LL, HS = xfm(ratio)
-    #print(LL.dtype)
 
     LL_sum = LL.sum(-1).sum(-1)
     
@@ -282,19 +271,15 @@ def get_dwt_level1_list(ratio_x: torch.Tensor):
     return pred_lst
 
 def get_dwt_level2_list(ratio_x: torch.Tensor):
-    #ratio = ratio_x.unsqueeze(1).unsqueeze(1)
     ratio = ratio_x
     B,C,H,W = ratio.shape
 
-    #size = int(math.sqrt(W))
     size = W
     
     ratio = ratio.reshape((B,C,size,size))        
 
     xfm = DWTForward(J=1, mode='zero', wave='db1').cuda()
-    #print(type(xfm))
     LL, HS = xfm(ratio)
-    #print(LL.dtype)
 
     HS_0 = HS[0][:,:,0,:,:]
     HS_1 = HS[0][:,:,1,:,:]

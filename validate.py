@@ -154,9 +154,6 @@ parser.add_argument('--dwt_level', nargs='*', type=int, default=[2,2,2],
                     help='DWT Level on Layers(2 2 2)')
 parser.add_argument('--sfn', default='No-Names', type=str,
                     help='test name ')
-# parser.add_argument('--dwt-kernel-size', type=int, default=0,
-#                     help='dwt kernel size (default: 0)')
-
 parser.add_argument('--corrupted', default='None', type=str,
                     help='')
 parser.add_argument('--img-mode', default='RGB', type=str,
@@ -325,12 +322,9 @@ def validate(args):
             if args.vit == False:
                 model(input, ena_dwt_ratio=args.ena_dwt_ratio, post_norm=args.post_norm, dwt_quant=args.dwt_quant)
             else:
-                #model(input, dwt_quant=args.dwt_quant)
                 model(input)
 
         end = time.time()
-        #f_csv = open('noise_result.csv','w')
-        #f_csv = open('original_result.csv','w')
         f_csv = open('new_result.csv','w')
         write = csv.writer(f_csv)
         header_lst = list()
@@ -342,16 +336,11 @@ def validate(args):
         
         for batch_idx, (input, target) in enumerate(loader):
             item_lst = list()
-            
-            #f_name = file_name_img[0].split('.')[0]
-            #item_lst.append(f_name)
-            
-            #print('file_name_img length',(file_name_img[0].split('.')))
+
             if args.no_prefetcher:
                 if args.aux_header == True:
                     target = target[0].to(device)
                     input = input.to(device)
-                    #target_dwt = target[1]
                 else:
                     target = target[0].to(device)
                     input = input.to(device)
@@ -370,9 +359,6 @@ def validate(args):
 
                 if valid_labels is not None:
                     output = output[:, valid_labels]
-                #print('input {} '.format(input.shape))
-                #print('output {} '.format(output.shape))
-                #print('target {} '.format(target.shape))
                 loss = criterion(output, target)
 
             if real_labels is not None:
