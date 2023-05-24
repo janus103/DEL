@@ -1,0 +1,2 @@
+data/mnist_test.pkl filter=lfs diff=lfs merge=lfs -text
+data/mnist_train.pkl filter=lfs diff=lfs merge=lfs -text
