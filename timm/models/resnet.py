@@ -18,9 +18,11 @@ import torchvision.transforms as T
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.data import CIFAR10_DWT_1_MEAN_STD
 from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier, create_classifier2
+from .layers import PatchEmbed, DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier, create_classifier2, trunc_normal_
 from .registry import register_model
 
+## for DWT 
+from .vision_transformer import Up_Attention
 import torch_dwt as tdwt
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
@@ -697,7 +699,34 @@ class ResNet(nn.Module):
         dwt_bn_layer = list()
         print(f'Resnet initialize -> Kenrel: {self.dwt_kernel_size} / Level: {self.dwt_level} / BN: {self.dwt_bn}')
         self.dwt_drop_layer = torch.nn.Dropout2d(p=0.5)
+
         
+        if self.dwt_level[0] == 1:
+            self.split_count = 4
+        elif self.dwt_level[0] == 2:
+            self.split_count = 16
+        elif self.dwt_level[0] == 3:
+            self.split_count = 64
+        else:
+            self.split_count = 1
+        
+        custom_img_size = 224
+        self.depth_ch = self.split_count * in_chans
+        self.unbind_count = int((custom_img_size/(2**(self.dwt_level[0]+1))) ** 2) # 224 is img size 
+        self.root_unbind_count = int((224/(2**(self.dwt_level[0]+1))))
+
+        self.unbind_output = int((custom_img_size/4) ** 2) # 224 is img size
+        self.root_unbind_output = int((custom_img_size/4)) # 224 is img size
+
+        if self.dwt_bn[2] == 1:
+            self.depth_norm = nn.BatchNorm2d(self.depth_ch)
+        elif self.dwt_bn[2] == 2:
+            self.depth_norm = nn.InstanceNorm2d(self.depth_ch, affine=False, track_running_stats=True)
+        elif self.dwt_bn[2] == 3:
+            self.depth_norm = nn.InstanceNorm2d(self.depth_ch, affine=True, track_running_stats=True) #IBN
+        else:
+            self.depth_norm = None
+
         # Stem
         deep_stem = 'deep' in stem_type
         inplanes = stem_width * 2 if deep_stem else 64
@@ -736,6 +765,16 @@ class ResNet(nn.Module):
         else:
             if self.dwt_kernel_size[0] == 0:
                 self.conv1 = nn.Conv2d(in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            if self.dwt_kernel_size[0] == 1:
+                self.depthwise_conv = nn.Conv2d(self.depth_ch, self.depth_ch, kernel_size=3, stride=2, padding=1, groups= self.depth_ch, bias=False)
+                self.pos_embed = nn.Parameter(torch.randn(1, self.depth_ch, self.unbind_count) * .02)
+                num_heads = 4
+                qkv_bias = True
+                attn_drop = 0.
+                proj_drop = 0.
+                drop = 0.
+                self.attn = Up_Attention(self.unbind_count, self.unbind_output, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+                self.pointwise_conv = nn.Conv2d(self.depth_ch, 64, kernel_size=1, stride=1, padding=0, bias=True)
             else:
                 if self.dwt_level[0] == 1:
                     for idx in range(4):
@@ -746,7 +785,7 @@ class ResNet(nn.Module):
                 elif self.dwt_level[0] == 3: 
                     for idx in range(64):
                         dwt_conv_layer.append(nn.Conv2d(in_chans, inplanes, kernel_size=self.dwt_kernel_size[0], stride=2, padding=3, bias=False).cuda())
-                else:
+                else:     
                     for idx in range(16):
                         dwt_conv_layer.append(nn.Conv2d(in_chans, inplanes, kernel_size=self.dwt_kernel_size[0], stride=2, padding=3, bias=False).cuda())
                 self.dwt_conv_layer = nn.ModuleList(dwt_conv_layer)
@@ -815,7 +854,10 @@ class ResNet(nn.Module):
 
     @torch.jit.ignore
     def init_weights(self, zero_init_last=True, dwt_kernel_size=0):
-        if dwt_kernel_size != 0:
+        if dwt_kernel_size == 1:
+            trunc_normal_(self.pos_embed, std=.02)
+
+        if dwt_kernel_size != 0 and dwt_kernel_size != 1:
             if len(self.dwt_conv_layer) != 0:
                 for idx, item in enumerate(self.dwt_conv_layer):
                     nn.init.kaiming_normal_(item.weight, mode='fan_out', nonlinearity='relu')
@@ -826,6 +868,10 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                trunc_normal_(m.weight, std=.02)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
         if zero_init_last:
             for m in self.modules():
                 if hasattr(m, 'zero_init_last'):
@@ -854,6 +900,36 @@ class ResNet(nn.Module):
     def get_first_output_fm(self):
         return self.first_output_fm
     
+    def dwt_depthwise_convolution(self, if_map):
+        #print('inputmap is trainable ? ',if_map.requires_grad)
+        split_tensor_lst = list()
+        if self.dwt_level[0] == 1:
+            tdwt.get_dwt_level1(if_map, split_tensor_lst, x_dwt_rate=None)
+        elif self.dwt_level[0] == 2:
+            tdwt.get_dwt_level2(if_map, split_tensor_lst, x_dwt_rate=None, x_quant=0)
+        elif self.dwt_level[0] == 3:
+            tdwt.get_dwt_level3(if_map, split_tensor_lst, x_dwt_rate=None)
+
+        #print('List Length => {}'.format(len(split_tensor_lst)))
+        #print('DWT Component is trainable ? ',split_tensor_lst[0].requires_grad)
+
+        B,_,_,_ = split_tensor_lst[0].shape
+        x = torch.cat(split_tensor_lst,dim=1)
+
+        #print('X(1): ', x.shape)
+        x = self.depthwise_conv(x)
+        if self.depth_norm != None:
+            x = self.depth_norm(x)
+        x = x.reshape(B,self.depth_ch,-1)
+        x = x + self.pos_embed
+        x = self.attn(x)
+        x = x.reshape(B,self.depth_ch, self.root_unbind_count,self.root_unbind_count)
+        x = self.pointwise_conv(x)
+        #print('X(2): ', x.shape, ' ' ,self.unbind_count)
+        return x 
+        
+        
+
     #Renew    
     def dwt_rearrange(self, if_map, dwt_ratio, post_norm=False, dwt_quant=1, dwt_drop=False):
         split_tensor_lst = list()
@@ -881,12 +957,12 @@ class ResNet(nn.Module):
                 gt_mean_var_lst.append([torch.mean(item.view(B, -1), dim=1), torch.var(item.view(B, -1), dim=1, unbiased=False)])   
         
         output_tensor_lst = nn.parallel.parallel_apply(module_lst1, input_lst1)
-        
+        '''
         if self.dwt_bn[0] > 0:
             module_bn_pairs1 = [(self.dwt_bn_layer[i]) for i in range(len(output_tensor_lst))]
             module_bn_pairs2 = [(output_tensor_lst[i]) for i in range(len(output_tensor_lst))]
             output_tensor_lst = nn.parallel.parallel_apply(module_bn_pairs1, module_bn_pairs2)
-            
+        '''    
         if dwt_drop==True:
             output_tensor_lst[0] = self.dwt_drop_layer(output_tensor_lst[0])
         
@@ -917,6 +993,8 @@ class ResNet(nn.Module):
     def forward_features(self, x, dwt_ratio=None, post_norm=False, dwt_quant=1, dwt_drop=False):
         if self.dwt_kernel_size[0] == 0:
             x = self.conv1(x)
+        elif self.dwt_kernel_size[0] == 1:
+            x = self.dwt_depthwise_convolution(x)
         else:
             if self.mvar == False:
                 x = self.dwt_rearrange(x, dwt_ratio, post_norm=post_norm, dwt_quant=dwt_quant, dwt_drop=dwt_drop)
@@ -926,7 +1004,7 @@ class ResNet(nn.Module):
         if self.mvar == False:
             x = self.bn1(x)
             x = self.act1(x)
-            x = self.maxpool(x)
+            #x = self.maxpool(x)
                 
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint_seq([self.layer1, self.layer2, self.layer3, self.layer4], x, flatten=True)
