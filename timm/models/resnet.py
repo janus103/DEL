@@ -724,31 +724,14 @@ class ResNet(nn.Module):
             self.depth_norm = nn.InstanceNorm2d(self.depth_ch, affine=False, track_running_stats=True)
         elif self.dwt_bn[2] == 3:
             self.depth_norm = nn.InstanceNorm2d(self.depth_ch, affine=True, track_running_stats=True) #IBN
+        elif self.dwt_bn[2] == 4:
+            self.depth_norm = nn.LayerNorm(self.depth_ch) # Layer Normalization
         else:
             self.depth_norm = None
 
         # Stem
         deep_stem = 'deep' in stem_type
         inplanes = stem_width * 2 if deep_stem else 64
-        
-        if self.dwt_bn[0] == 1:
-            first_dwt_norm_layer = nn.BatchNorm2d(inplanes)
-        elif self.dwt_bn[0] == 2:
-            first_dwt_norm_layer = nn.InstanceNorm2d(inplanes, affine=False, track_running_stats=True)
-        elif self.dwt_bn[0] == 3:
-            first_dwt_norm_layer = nn.InstanceNorm2d(inplanes, affine=True, track_running_stats=True) #IBN
-        else:
-            first_dwt_norm_layer = None
-            
-            
-        if self.dwt_bn[1] == 0:
-            first_norm_layer = nn.BatchNorm2d(inplanes)
-        elif self.dwt_bn[1] == 1:
-            first_norm_layer = nn.BatchNorm2d(inplanes)
-        elif self.dwt_bn[1] == 2:
-            first_norm_layer = nn.InstanceNorm2d(inplanes, affine=False, track_running_stats=True)
-        elif self.dwt_bn[1] == 3:
-            first_norm_layer = nn.InstanceNorm2d(inplanes, affine=True, track_running_stats=True)#IBN
         
         if deep_stem:
             stem_chs = (stem_width, stem_width)
@@ -789,21 +772,8 @@ class ResNet(nn.Module):
                     for idx in range(16):
                         dwt_conv_layer.append(nn.Conv2d(in_chans, inplanes, kernel_size=self.dwt_kernel_size[0], stride=2, padding=3, bias=False).cuda())
                 self.dwt_conv_layer = nn.ModuleList(dwt_conv_layer)
-            if self.dwt_bn[0] > 0:
-                if self.dwt_level[0] == 1:
-                    for idx in range(4):
-                        dwt_bn_layer.append(first_dwt_norm_layer)
-                elif self.dwt_level[0] == 2:
-                    for idx in range(16):
-                        dwt_bn_layer.append(first_dwt_norm_layer)
-                elif self.dwt_level[0] == 3: 
-                    for idx in range(64):
-                        dwt_bn_layer.append(first_dwt_norm_layer)
-                else:
-                    for idx in range(16):
-                        dwt_bn_layer.append(first_dwt_norm_layer)
-                self.dwt_bn_layer = nn.ModuleList(dwt_bn_layer)
-        self.bn1 = first_norm_layer
+
+        self.bn1 = nn.BatchNorm2d(inplanes)
         if self.mvar== True:
             self.bn1_lst = list()
             if self.dwt_level[0] == 2:
@@ -957,12 +927,7 @@ class ResNet(nn.Module):
                 gt_mean_var_lst.append([torch.mean(item.view(B, -1), dim=1), torch.var(item.view(B, -1), dim=1, unbiased=False)])   
         
         output_tensor_lst = nn.parallel.parallel_apply(module_lst1, input_lst1)
-        '''
-        if self.dwt_bn[0] > 0:
-            module_bn_pairs1 = [(self.dwt_bn_layer[i]) for i in range(len(output_tensor_lst))]
-            module_bn_pairs2 = [(output_tensor_lst[i]) for i in range(len(output_tensor_lst))]
-            output_tensor_lst = nn.parallel.parallel_apply(module_bn_pairs1, module_bn_pairs2)
-        '''    
+
         if dwt_drop==True:
             output_tensor_lst[0] = self.dwt_drop_layer(output_tensor_lst[0])
         
